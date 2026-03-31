@@ -1,0 +1,26 @@
+name: Check allowed users
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check-user:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PR author is allowed
+        env:
+          ALLOWED_USERS: ${{ secrets.ALLOWED_USERS }}
+          PR_AUTHOR: ${{ github.actor }}
+        run: |
+          IFS=',' read -ra USERS <<< "$ALLOWED_USERS"
+          for user in "${USERS[@]}"; do
+            trimmed=$(echo "$user" | tr -d '[:space:]')
+            if [ "$trimmed" = "$PR_AUTHOR" ]; then
+              echo "✅ $PR_AUTHOR is allowed."
+              exit 0
+            fi
+          done
+          echo "❌ $PR_AUTHOR is not in the allowed users list."
+          exit 1
