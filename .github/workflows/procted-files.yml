@@ -5,6 +5,12 @@ on:
     branches:
       - main
       - develop
+    paths:
+      - '.github/workflows/**'
+      - '.env'
+      - '.gitignore'
+      - '.lintstagedrc.js'
+      - '.husky/**'
 
 jobs:
   check-protected-files:
@@ -13,38 +19,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # fetch all history to do proper diff
+          fetch-depth: 0
 
       - name: Check for unauthorized changes
         run: |
-          # List of protected files
-          PROTECTED_FILES=".env .gitignore .lintstagedrc.js .husky"
+          # List of protected files/directories
+          PROTECTED_PATHS=(".github/workflows" ".env" ".gitignore" ".lintstagedrc.js" ".husky")
 
           # Fetch allowed users from GitHub secret
           IFS=',' read -r -a ALLOWED_USERS <<< "${{ secrets.ALLOWED_USERS }}"
 
           # Get PR author
-          PR_AUTHOR=$(jq -r .pull_request.user.login "$GITHUB_EVENT_PATH")
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
           echo "PR author: $PR_AUTHOR"
+          echo "Allowed users: ${ALLOWED_USERS[@]}"
 
-          # Check if any protected files changed
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
-          PROTECTED_CHANGED=false
-          for file in $PROTECTED_FILES; do
-            if echo "$CHANGED_FILES" | grep -q "^$file$"; then
-              echo "⚠️ Protected file changed: $file"
-              PROTECTED_CHANGED=true
+          # Check if author is allowed
+          IS_ALLOWED=false
+          for user in "${ALLOWED_USERS[@]}"; do
+            if [[ "$PR_AUTHOR" == "$user" ]]; then
+              IS_ALLOWED=true
+              break
             fi
           done
 
-          # Block if unauthorized
-          if [[ "$PROTECTED_CHANGED" = true ]]; then
-            if [[ ! " ${ALLOWED_USERS[@]} " =~ " ${PR_AUTHOR} " ]]; then
-              echo "❌ Unauthorized user '$PR_AUTHOR' tried to modify protected files."
-              exit 1
-            else
-              echo "✅ Authorized user '$PR_AUTHOR' modified protected files."
-            fi
+          if [[ "$IS_ALLOWED" == false ]]; then
+            echo "❌ Unauthorized user '$PR_AUTHOR' attempted to modify protected files."
+            exit 1
           else
-            echo "✅ No protected files modified."
+            echo "✅ Authorized user '$PR_AUTHOR' is allowed to modify protected files."
           fi
