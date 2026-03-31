@@ -1,0 +1,51 @@
+name: Protect Critical Files
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - '.github/workflows/**'
+      - '.env'
+      - '.gitignore'
+      - '.lintstagedrc.js'
+      - '.husky/**'
+
+jobs:
+  check-protected-files:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Check for unauthorized changes
+        run: |
+          # List of protected files/directories
+          PROTECTED_PATHS=(".github/workflows" ".env" ".gitignore" ".lintstagedrc.js" ".husky")
+
+          # Fetch allowed users from GitHub secret
+          IFS=',' read -r -a ALLOWED_USERS <<< "${{ secrets.ALLOWED_USERS }}"
+
+          # Get PR author
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          echo "PR author: $PR_AUTHOR"
+          echo "Allowed users: ${ALLOWED_USERS[@]}"
+
+          # Check if author is allowed
+          IS_ALLOWED=false
+          for user in "${ALLOWED_USERS[@]}"; do
+            if [[ "$PR_AUTHOR" == "$user" ]]; then
+              IS_ALLOWED=true
+              break
+            fi
+          done
+
+          if [[ "$IS_ALLOWED" == false ]]; then
+            echo "❌ Unauthorized user '$PR_AUTHOR' attempted to modify protected files."
+            exit 1
+          else
+            echo "✅ Authorized user '$PR_AUTHOR' is allowed to modify protected files."
+          fi
